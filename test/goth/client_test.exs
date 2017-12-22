@@ -41,6 +41,7 @@ defmodule Goth.ClientTest do
     scope = "prediction"
 
     Bypass.expect bypass, fn conn ->
+      # IO.puts "got a request!"
       assert "/oauth2/v4/token" == conn.request_path
       assert "POST"             == conn.method
 
@@ -57,35 +58,15 @@ defmodule Goth.ClientTest do
     assert %Token{token: ^at, type: ^tt, expires: _exp} = data
   end
 
-  defp assert_body_is_legit_jwt(conn, scope) do
-    {:ok, body, _conn} = Plug.Conn.read_body(conn)
-    assert String.length(body) > 0
-
-    [_header, claims, _sign] = String.split(body, ".")
-    claims = claims |> Base.url_decode64!(padding: false) |> Poison.decode!
-
-    generated = Client.claims(scope, claims["iat"])
-
-    assert ^generated = claims
-  end
-
   test "we call the API with the correct refresh data and generate a token", %{bypass: bypass} do
-    # Set up a temporary config with a refresh token
-    normal_json = Application.get_env(:goth, :json)
-    refresh_json = "test/data/home/gcloud/application_default_credentials.json" |> Path.expand |> File.read!
-    Application.put_env(:goth, :json, refresh_json, persistent: true)
-    Application.stop(:goth)
-    Application.start(:goth)
-
     token_response = %{
       "access_token" => "1/8xbJqaOZXSUZbHLl5EOtu1pxz3fmmetKx9W8CV4t79M",
       "token_type"   => "Bearer",
       "expires_in"   => 3600
     }
 
-    scope = "prediction"
-
     Bypass.expect bypass, fn conn ->
+      IO.puts "called!"
       assert "/oauth2/v4/token" == conn.request_path
       assert "POST"             == conn.method
 
@@ -94,6 +75,15 @@ defmodule Goth.ClientTest do
 
       Plug.Conn.resp(conn, 201, Poison.encode!(token_response))
     end
+
+    # Set up a temporary config with a refresh token
+    normal_json = Application.get_env(:goth, :json)
+    refresh_json = "test/data/home/gcloud/application_default_credentials.json" |> Path.expand |> File.read!
+    Application.put_env(:goth, :json, refresh_json, persistent: true)
+    Application.stop(:goth)
+    Application.start(:goth)
+
+    scope = "prediction"
 
     {:ok, data} = Client.get_access_token(scope)
 
@@ -162,5 +152,17 @@ defmodule Goth.ClientTest do
     {:error, data} = Client.get_access_token(scope)
 
     assert data =~ "Could not retrieve token, response:"
+  end
+
+  defp assert_body_is_legit_jwt(conn, scope) do
+    {:ok, body, _conn} = Plug.Conn.read_body(conn)
+    assert String.length(body) > 0
+
+    [_header, claims, _sign] = String.split(body, ".")
+    claims = claims |> Base.url_decode64!(padding: false) |> Poison.decode!
+
+    generated = Client.claims(scope, claims["iat"])
+
+    assert ^generated = claims
   end
 end

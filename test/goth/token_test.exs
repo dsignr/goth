@@ -47,17 +47,25 @@ defmodule Goth.TokenTest do
 
   test "refreshing a token hits the API", %{bypass: bypass} do
     Bypass.expect bypass, fn conn ->
-      Plug.Conn.resp(conn, 201, Poison.encode!(%{"access_token" => "123", "token_type" => "Bearer", "expires_in" => 3600}))
+      at =
+        if called = Process.get(:bypass_calls) do
+          "123"
+        else
+          Process.put(:bypass_calls, 1)
+          "321"
+        end
+      Plug.Conn.resp(conn, 201, Poison.encode!(%{"access_token" => at, "token_type" => "Bearer", "expires_in" => 3600}))
     end
 
     assert {:ok, token} = Token.for_scope("first")
     assert token.token != nil
 
-    Bypass.expect bypass, fn conn ->
-      Plug.Conn.resp(conn, 201, Poison.encode!(%{"access_token" => "321", "token_type" => "Bearer", "expires_in" => 3600}))
-    end
+    # Bypass.expect bypass, fn conn ->
+    #   Plug.Conn.resp(conn, 201, Poison.encode!(%{"access_token" => "321", "token_type" => "Bearer", "expires_in" => 3600}))
+    # end
 
     assert {:ok, %Token{token: at2}} = Token.refresh!(token)
     assert token.token != at2
+    Process.delete(:bypass_calls)
   end
 end
